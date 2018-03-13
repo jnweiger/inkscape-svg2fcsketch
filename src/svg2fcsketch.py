@@ -89,6 +89,8 @@ class SketchPathGen(PathGenerator):
   def roundedRect(self, x, y, w, h, rx, ry, node, mat):
     print("not impl. roundedRect: ", x, y, w, h, rx, ry, node, mat)
 
+
+
 fcdoc = FreeCAD.newDocument('sketch_lines')
 ske = fcdoc.addObject('Sketcher::SketchObject', 'Sketch')
 
@@ -106,7 +108,7 @@ else:
   # Traverse the entire document building new, transformed paths
   svg.recursivelyTraverseSvg(svg.document.getroot(), svg.docTransform)
 
-print(svg.paths)
+print(svg.paths)        # do not use svg.paths here. Use the ske object!
 
 ##ske.addConstraint(con)
 #doc.recompute()
