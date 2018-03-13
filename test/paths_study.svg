@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   xmlns:dc="http://purl.org/dc/elements/1.1/"
+   xmlns:cc="http://creativecommons.org/ns#"
+   xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+   xmlns:svg="http://www.w3.org/2000/svg"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   width="800"
+   height="1200"
+   viewBox="0 0 800 1200"
+   version="1.1"
+   id="svg8"
+   inkscape:version="0.92.2 (unknown)"
+   sodipodi:docname="paths_study.svg">
+  <defs
+     id="defs2" />
+  <sodipodi:namedview
+     id="base"
+     pagecolor="#ffffff"
+     bordercolor="#666666"
+     borderopacity="1.0"
+     inkscape:pageopacity="0.0"
+     inkscape:pageshadow="2"
+     inkscape:zoom="6.0914974"
+     inkscape:cx="75.351134"
+     inkscape:cy="1138.3045"
+     inkscape:document-units="px"
+     inkscape:current-layer="layer1"
+     showgrid="true"
+     inkscape:snap-bbox="true"
+     inkscape:bbox-nodes="true"
+     inkscape:snap-smooth-nodes="true"
+     inkscape:window-width="1920"
+     inkscape:window-height="1050"
+     inkscape:window-x="0"
+     inkscape:window-y="0"
+     inkscape:window-maximized="1"
+     units="px">
+    <inkscape:grid
+       type="xygrid"
+       id="grid819"
+       units="px"
+       spacingx="0.26458333"
+       spacingy="0.26458333" />
+  </sodipodi:namedview>
+  <metadata
+     id="metadata5">
+    <rdf:RDF>
+      <cc:Work
+         rdf:about="">
+        <dc:format>image/svg+xml</dc:format>
+        <dc:type
+           rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
+        <dc:title></dc:title>
+      </cc:Work>
+    </rdf:RDF>
+  </metadata>
+  <g
+     inkscape:label="Ebene 1"
+     inkscape:groupmode="layer"
+     id="layer1"
+     transform="translate(0,20.500008)">
+    <rect
+       style="opacity:1;fill:#ff0000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:1;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="rect815"
+       width="59.999996"
+       height="30"
+       x="50"
+       y="29.50001"
+       ry="5"
+       rx="5">
+      <title
+         id="title4537">rect 60x30 r5</title>
+    </rect>
+    <circle
+       style="opacity:1;fill:#ff0000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.99999994;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="path817"
+       cx="15"
+       cy="34.500008"
+       r="15">
+      <title
+         id="title4533">circle 30 x 30</title>
+    </circle>
+    <path
+       id="circle821"
+       style="opacity:1;fill:#ff0000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.99999994;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       sodipodi:type="arc"
+       sodipodi:cx="15"
+       sodipodi:cy="69.500008"
+       sodipodi:rx="15"
+       sodipodi:ry="15.000001"
+       sodipodi:start="0"
+       sodipodi:end="4.712389"
+       sodipodi:open="true"
+       d="M 30,69.500008 
+          A 15,15.000001 0 0 1 20.740251,83.358202 
+            15,15.000001 0 0 1 4.3933982,80.10661 
+            15,15.000001 0 0 1 1.1418071,63.759756
+            15,15.000001 0 0 1 15,54.500007">
+      <title
+         id="title4535">arc 30x30@0° 0°,270°</title>
+    </path>
+    <path
+       style="fill:none;stroke:#000000;stroke-width:1;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-opacity:1"
+       d="m 49.999999,84.500009 
+            15,0 
+          c 0,-5 0,-10 5,-15 
+            10,-10 10,0 10,5 
+            0,5 0,10 10,10 
+            9.999999,0 0,-5 9.999999,-5
+            5.000002,-5 -4.999999,-5 -4.999999,-10
+            0,-5 10.000001,0 10.000001,0"
+       id="path823"
+       inkscape:connector-curvature="0"
+       sodipodi:nodetypes="ccszzcsc">
+      <title
+         id="title4539">path H C0 C1 C2 C2 C0 C1= L</title>
+    </path>
+    <path
+       d="m 3.2339855,102.51396 
+          a 15,10.000001 0 0 1 -17.0936105,7.25989
+            15,10.000001 0 0 1 -12.338197,-10.719634
+            15,10.000001 0 0 1 14.94292,-9.128443
+          l 0,10.000001
+          z"
+       sodipodi:end="4.712389"
+       sodipodi:start="0.26179939"
+       sodipodi:ry="10.000001"
+       sodipodi:rx="15"
+       sodipodi:cy="99.925774"
+       sodipodi:cx="-11.254902"
+       sodipodi:type="arc"
+       style="opacity:1;fill:#ff0000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.99999994;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="path4543"
+       transform="rotate(-15)">
+      <title
+         id="title4541">arc 30x20 @ 15°ccw, 30°,270°</title>
+    </path>
+    <path
+       d="M 62.990381,104.50001 A 15,10.000001 0 0 1 44.869698,108.89693 15,10.000001 0 0 1 35.227884,97.763526 15,10.000001 0 0 1 50,89.500007"
+       sodipodi:open="true"
+       sodipodi:end="4.712389"
+       sodipodi:start="0.52359878"
+       sodipodi:ry="10.000001"
+       sodipodi:rx="15"
+       sodipodi:cy="99.500008"
+       sodipodi:cx="50"
+       sodipodi:type="arc"
+       style="opacity:1;fill:#ff0000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.99999994;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       id="path4547">
+      <title
+         id="title4545">arc 30x30@0° 0°,270°</title>
+    </path>
+    <path
+       id="circle4551"
+       style="opacity:1;fill:#ff0000;fill-opacity:1;fill-rule:evenodd;stroke:#000000;stroke-width:0.99999994;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1"
+       sodipodi:type="arc"
+       sodipodi:cx="15"
+       sodipodi:cy="-0.49999025"
+       sodipodi:rx="15"
+       sodipodi:ry="15"
+       sodipodi:start="0"
+       sodipodi:end="4.712389"
+       d="M 30,-0.49999025 A 15,15 0 0 1 20.740251,13.358203 15,15 0 0 1 4.3933982,10.106611 15,15 0 0 1 1.1418071,-6.2402419 15,15 0 0 1 15,-15.49999 l 0,14.99999975 z">
+      <title
+         id="title4549">arc 30 x 30 closed 270</title>
+    </path>
+  </g>
+</svg>
