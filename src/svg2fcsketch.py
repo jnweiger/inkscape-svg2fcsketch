@@ -77,13 +77,13 @@ class SketchPathGen(PathGenerator):
   def __init__(self, ske):
     self.ske = ske
 
-  def pathVertices(self, d, node, mat):
+  def pathString(self, d, node, mat):
     """
     d is expected formatted as an svg path string here.
     """
-    print("not impl. pathVertices: ", d, node, mat)
+    print("not impl. pathString: ", d, node, mat)
 
-  def simplePath(self, d, node, mat):
+  def pathList(self, d, node, mat):
     """
     d is expected as an [[cmd, [args]], ...] arrray
     """
@@ -96,9 +96,19 @@ class SketchPathGen(PathGenerator):
     print("GeometryCount changed from %d to %d" % (i, int(self.ske.GeometryCount)))
     print("not impl. simplePath: ", d, node, mat)
 
-  def roundedRect(self, x, y, w, h, rx, ry, node, mat):
-    print("not impl. roundedRect: ", x, y, w, h, rx, ry, node, mat)
+  def objRoundedRect(self, x, y, w, h, rx, ry, node, mat):
+    print("not impl. objRoundedRect: ", x, y, w, h, rx, ry, node, mat)
 
+  def objRect(self, x, y, w, h, node, mat):
+    print("not impl. objRect: ", x, y, w, h, node, mat)
+
+  def objEllipse(self, cx, xy, rx, ry, node, mat):
+    print("not impl. objEllipse: ", cx, xy, rx, ry, node, mat)
+
+  def objArc(self, d, cx, cy, rx, ry, st, en, cl, node, mat):
+    """
+    We ignore the path d, and produce a nice arc object.
+    """
 
 
 fcdoc = FreeCAD.newDocument(docname)
