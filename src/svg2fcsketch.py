@@ -22,7 +22,8 @@ import ProfileLib.RegularPolygon as Poly
 
 ## INLINE_BLOCK_START
 # for easier distribution, our Makefile can inline these imports
-sys.path.append('/home/src/github/jnweiger/inkscape-thunderlaser/src/')
+# sys.path.append('/home/src/github/jnweiger/inkscape-thunderlaser/src/')
+sys.path.append(os.path.abspath(os.path.dirname(__file__))+'/../inksvg/src/')
 from inksvg import InkSvg, PathGenerator
 ## INLINE_BLOCK_END
 
@@ -76,23 +77,32 @@ class SketchPathGen(PathGenerator):
   def __init__(self, ske):
     self.ske = ske
 
-  def simplePath(self, a, node, mat):
-    print(a, node, mat)
+  def pathVertices(self, d, node, mat):
+    """
+    d is expected formatted as an svg path string here.
+    """
+    print("not impl. pathVertices: ", d, node, mat)
+
+  def simplePath(self, d, node, mat):
+    """
+    d is expected as an [[cmd, [args]], ...] arrray
+    """
+    print(d, node, mat)
     i = int(ske.GeometryCount)      # 0
     geo = []
     geo.append(Part.LineSegment(Base.Vector(4,8,0),Base.Vector(9,8,0)))
     geo.append(Part.LineSegment(Base.Vector(9,8,0),Base.Vector(9,2,0)))
     self.ske.addGeometry(geo, False)
     print("GeometryCount changed from %d to %d" % (i, int(self.ske.GeometryCount)))
-    print("not impl. simplePath: ", a, node, mat)
+    print("not impl. simplePath: ", d, node, mat)
 
   def roundedRect(self, x, y, w, h, rx, ry, node, mat):
     print("not impl. roundedRect: ", x, y, w, h, rx, ry, node, mat)
 
 
 
-fcdoc = FreeCAD.newDocument('sketch_lines')
-ske = fcdoc.addObject('Sketcher::SketchObject', 'Sketch')
+fcdoc = FreeCAD.newDocument(docname)
+ske = fcdoc.addObject('Sketcher::SketchObject', 'Sketch_'+docname)
 
 svg = InkSvg(pathgen=SketchPathGen(ske))
 svg.load(svgfile)       # respin of inkex.affect()
