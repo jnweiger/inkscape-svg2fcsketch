@@ -38,6 +38,7 @@ con = [
     Sketcher.Constraint('Coincident',i+2,2, i+3,1),
     Sketcher.Constraint('Coincident',i+3,2, i+5,2),
 ]
+
 #ske.addConstraint(Sketcher.Constraint('Horizontal',0))
 #ske.addConstraint(Sketcher.Constraint('Horizontal',2))
 #ske.addConstraint(Sketcher.Constraint('Vertical',1))
