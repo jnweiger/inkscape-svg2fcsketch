@@ -9,14 +9,33 @@
 #
 # v0.1 jw, initial draft refactoring inksvg to make it fit here.
 # v0.2 jw, Introducing class SketchPathGen to seperate the sketch generator from the svg parser.
+# v0.3 jw, correct _coord_from_svg() size and offset handling. Suppress
+#          silly version printing, that would ruin an inkscape extension.
+#          Added exmple guidoc_xml output. How to generate this?
 
 import os, sys, math, re
 from optparse import OptionParser
+verbose=0       # 0=quiet, 1=normal
 
 
 sys.path.append('/usr/lib/freecad-daily/lib/')  # prefer daily over normal.
 sys.path.append('/usr/lib/freecad/lib/')
+
+if verbose == 0:
+  os.dup2(1,99)         # hack to avoid silly version string printing.
+  f = open("/dev/null", "w")
+  os.dup2(f.fileno(), 1)
+
+# The for version printing code has
+# src/App/Application.cpp: if (!(mConfig["Verbose"] == "Strict"))
+# but we cannot call SetConfig('Verbose', 'Strict') early enough.
 from FreeCAD import Base
+sys.stdout.flush()      # push silly version string into /dev/null
+
+if verbose == 0:
+  f.close()
+  os.dup2(99,1)         # back in cansas.
+
 import Part, Sketcher
 import ProfileLib.RegularPolygon as Poly
 
@@ -27,7 +46,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__))+'/../inksvg/src/')
 from inksvg import InkSvg, PathGenerator
 ## INLINE_BLOCK_END
 
-__version__ = '0.2'
+__version__ = '0.3'
 
 parser = OptionParser(usage="\n    %prog [options] SVGFILE [OUTFILE]\n\nTry --help for details.")
 parser.add_option("-o", "--outfile", dest="outfile",
@@ -74,27 +93,34 @@ class SketchPathGen(PathGenerator):
   """
   Generate XML code for a FreeCAD sketch.
   """
-  def __init__(self, ske, scale=1.0, yflip=True, yoff=0.0, stats=None):
+  def __init__(self, ske, yflip=True):
     self.ske = ske
     self.m = None
-    self.scale = scale
     self.yflip = yflip
-    self.yoff = yoff
 
-    # count how many objects of each type we generate.
+    # prepare counters how many objects of each type we generate.
     self.stats = {}
-    if stats is not None: self.stats = stats
     for s in ('pathList', 'pathString', 'objRect', 'objRoundedRect',
               'objArc', 'objEllipse'):
       self.stats[s] = 0
 
   def _coord_from_svg(self, m=None):
-    xs = self.scale
-    ys = self.scale
-    if self.yflip: ys = -self.scale
+    """
+    Use SVG properties set by InkSVG.handleViewBox()
+    to define the transformation matrix from dpi'ish SVG space
+    into metric FreeCAD space.
+    """
+    xs = 1.0
+    if self._svg.docTransform is not None:
+      xs = self._svg.docTransform[0][0]
+      if abs(xs) < 0.000001:
+        xs = 1.0        # avoid divison by zero.
+    ys = xs
+    if self.yflip: ys = -ys
+
     if m is None: m = self.m
-    m.move(0, self.yoff, 0)
-    m.scale(xs, ys, 1)
+    m.move(0, -self._svg.docHeight, 0)
+    m.scale(1/xs, 1/ys, 1)
     return m
 
   def _matrix_from_svg(self, svgmat, coordcvt=True):
@@ -159,10 +185,12 @@ class SketchPathGen(PathGenerator):
       Part.LineSegment(self._from_svg(x  ,y+h), self._from_svg(x  ,y  ))
     ], False)
     ske.addConstraint([
-      Sketcher.Constraint('Coincident',i+0,2, i+1,1),
-      Sketcher.Constraint('Coincident',i+1,2, i+2,1),
-      Sketcher.Constraint('Coincident',i+2,2, i+3,1),
-      Sketcher.Constraint('Coincident',i+3,2, i+0,1),
+      Sketcher.Constraint('Coincident', i+0,2, i+1,1),
+      Sketcher.Constraint('Coincident', i+1,2, i+2,1),
+      Sketcher.Constraint('Coincident', i+2,2, i+3,1),
+      Sketcher.Constraint('Coincident', i+3,2, i+0,1),
+      Sketcher.Constraint('Parallel', i+2, i+0),
+      Sketcher.Constraint('Parallel', i+3, i+1)
     ])
     self.stats['objRect'] += 1
 
@@ -178,8 +206,7 @@ class SketchPathGen(PathGenerator):
 fcdoc = FreeCAD.newDocument(docname)
 ske = fcdoc.addObject('Sketcher::SketchObject', 'Sketch_'+docname)
 
-gen_stats = {}
-svg = InkSvg(pathgen=SketchPathGen(ske, stats=gen_stats, scale=1.0, yflip=True, yoff=-100.0))
+svg = InkSvg(pathgen=SketchPathGen(ske, yflip=True))
 svg.load(svgfile)       # respin of inkex.affect()
 selected = svg.getElementsByIds(options.ids)
 
@@ -193,11 +220,41 @@ else:
   # Traverse the entire document building new, transformed paths
   svg.recursivelyTraverseSvg(svg.document.getroot(), svg.docTransform)
 
-print(ske)
-print(gen_stats)
 
+if verbose > 0:
+  print("svg2fcsketch %s, InkSvg %s" % (__version__, InkSvg.__version__))
+print(svg.stats)
+# print(svg.docTransform, svg.docWidth, svg.docHeight, svg.dpi)
+
+# print(ske)
 #fcdoc.recompute()
 
 fcdoc.saveAs(fcstdfile)
-print("%s written." % fcstdfile)
+## TODO: Add GuiDocument.xml to the zip archive of fcstdfile
+## to switch on default visibilitiy, and set a default camera.
+camera_xml = ''
+if True:
+  cx = 35.246845        # bbox center
+  cy = 37.463238        # bbox center
+  cz = 51.437702        # focal distance: 1/2 of bbox diagonal
+  zd = 0.05             # +/- for far/near distance
+  camera_xml = """<Camera settings="  OrthographicCamera {   viewportMapping ADJUST_CAMERA position %f %f %f orientation 0 0 1  0 nearDistance %f farDistance %f aspectRatio 1 focalDistance %f height %f } "/>""" % (cx,cy,cz, cz-zd, cz+zd, cz, 2*cz)
+guidoc_xml = """<?xml version='1.0' encoding='utf-8'?>
+<Document SchemaVersion="1">
+    <ViewProviderData Count="1">
+        <ViewProvider name="%s" expanded="0">
+            <Properties Count="1">
+                <Property name="Visibility" type="App::PropertyBool">
+                    <Bool value="true"/>
+                </Property>
+            </Properties>
+        </ViewProvider>
+    </ViewProviderData>
+    %s
+</Document>
+""" % ('Sketch_'+docname, camera_xml)
 
+if verbose > -1:
+  print("%s written." % fcstdfile)
+
+print(guidoc_xml)
