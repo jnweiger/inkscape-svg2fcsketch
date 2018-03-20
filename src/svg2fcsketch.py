@@ -11,7 +11,8 @@
 # v0.2 jw, Introducing class SketchPathGen to seperate the sketch generator from the svg parser.
 # v0.3 jw, correct _coord_from_svg() size and offset handling. Suppress
 #          silly version printing, that would ruin an inkscape extension.
-#          Added exmple guidoc_xml output. How to generate this?
+# V0.4 jw, Added GuiDocument.xml for visibility and camera defaults.
+#          Using BoundBox() to compute camera placement.
 
 import os, sys, math, re
 from optparse import OptionParser
@@ -29,7 +30,7 @@ if verbose == 0:
 # The for version printing code has
 # src/App/Application.cpp: if (!(mConfig["Verbose"] == "Strict"))
 # but we cannot call SetConfig('Verbose', 'Strict') early enough.
-from FreeCAD import Base
+from FreeCAD import Base, BoundBox
 sys.stdout.flush()      # push silly version string into /dev/null
 
 if verbose == 0:
@@ -46,7 +47,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__))+'/../inksvg/src/')
 from inksvg import InkSvg, PathGenerator
 ## INLINE_BLOCK_END
 
-__version__ = '0.3'
+__version__ = '0.4'
 
 parser = OptionParser(usage="\n    %prog [options] SVGFILE [OUTFILE]\n\nTry --help for details.")
 parser.add_option("-o", "--outfile", dest="outfile",
@@ -97,6 +98,7 @@ class SketchPathGen(PathGenerator):
     self.ske = ske
     self.m = None
     self.yflip = yflip
+    self.bbox = BoundBox()
 
     # prepare counters how many objects of each type we generate.
     self.stats = {}
@@ -150,8 +152,9 @@ class SketchPathGen(PathGenerator):
     Converts a 2D Vector from SVG into a FreeCAD 3D vector applying Base.Matrix m.
     """
     if m is None: m = self.m
-    return m.multiply(Base.Vector(x, y, 0))
-
+    v = m.multiply(Base.Vector(x, y, 0))
+    self.bbox.add(v)
+    return v
 
   def pathString(self, d, node, mat):
     """
@@ -234,10 +237,11 @@ fcdoc.saveAs(fcstdfile)
 ## to switch on default visibilitiy, and set a default camera.
 camera_xml = ''
 if True:
-  cx = 35.246845        # bbox center
-  cy = 37.463238        # bbox center
-  cz = 51.437702        # focal distance: 1/2 of bbox diagonal
-  zd = 0.05             # +/- for far/near distance
+  bb = svg.pathgen.bbox
+  cx = bb.Center.x   # 35.246845 # bbox center
+  cy = bb.Center.y   # 37.463238 # bbox center
+  cz = bb.DiagonalLength * 0.5  # 51.437702 # focal distance: 1/2 of bbox diagonal
+  zd = cz * 0.001             # 0.05 # +/- for far/near distance
   camera_xml = """<Camera settings="  OrthographicCamera {   viewportMapping ADJUST_CAMERA position %f %f %f orientation 0 0 1  0 nearDistance %f farDistance %f aspectRatio 1 focalDistance %f height %f } "/>""" % (cx,cy,cz, cz-zd, cz+zd, cz, 2*cz)
 guidoc_xml = """<?xml version='1.0' encoding='utf-8'?>
 <Document SchemaVersion="1">
@@ -254,7 +258,15 @@ guidoc_xml = """<?xml version='1.0' encoding='utf-8'?>
 </Document>
 """ % ('Sketch_'+docname, camera_xml)
 
+try:
+  import zipfile
+  z = zipfile.ZipFile(fcstdfile, 'a')
+  z.writestr('GuiDocument.xml', guidoc_xml)
+  z.close()
+except:
+  print(guidoc_xml)
+  print("Warning: Failed to add GuiDocument.xml to %s -- camera and visibility are undefined." % fcstdfile)
+
 if verbose > -1:
   print("%s written." % fcstdfile)
 
-print(guidoc_xml)
