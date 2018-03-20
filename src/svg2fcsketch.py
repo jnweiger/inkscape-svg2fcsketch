@@ -3,13 +3,13 @@
 # (C) 2018 juergen@fabmail.org
 # Distribute under GPL-2.0 or ask.
 #
-# FROM: 
+# FROM:
 #  https://github.com/FreeCAD/FreeCAD/blob/master/src/Mod/Sketcher/TestSketcherApp.py
 #  /usr/lib/freecad-daily/Mod/Sketcher/SketcherExample.py
 #
 # v0.1 jw, initial draft refactoring inksvg to make it fit here.
 # v0.2 jw, Introducing class SketchPathGen to seperate the sketch generator from the svg parser.
- 
+
 import os, sys, math, re
 from optparse import OptionParser
 
@@ -32,8 +32,8 @@ __version__ = '0.2'
 parser = OptionParser(usage="\n    %prog [options] SVGFILE [OUTFILE]\n\nTry --help for details.")
 parser.add_option("-o", "--outfile", dest="outfile",
                          help="write fcstd to OUTPUT. Default: same as input file, but with .fcstd suffix instead.", metavar="OUTPUT")
-parser.add_option("-i", "--id", "--ids", dest="ids", 
-                        action="append", type="string", default=[], 
+parser.add_option("-i", "--id", "--ids", dest="ids",
+                        action="append", type="string", default=[],
                         help="Select svg object(s) by id attribute. Use multiple times or combine with comma. Default: root object, aka all")
 parser.add_option("--selected-nodes", dest="selected_nodes",
                         action="append", type="string", default=[],
@@ -53,13 +53,13 @@ parser.add_option("-v", "--verbose",
 if options.version:
   print("InkSvg %s\n%s %s\n" % (InkSvg.__version__, sys.argv[0], __version__))
   sys.exit(0)
-if len(args) < 1: 
+if len(args) < 1:
   parser.error("Input svg file missing.")
 
 svgfile = args[0]
 
 outdir = '.'
-if len(args) > 1: 
+if len(args) > 1:
   fcstdfile = args[1]
 else:
   if options.outfile:
@@ -74,8 +74,58 @@ class SketchPathGen(PathGenerator):
   """
   Generate XML code for a FreeCAD sketch.
   """
-  def __init__(self, ske):
+  def __init__(self, ske, scale=1.0, yflip=True, yoff=0.0, stats=None):
     self.ske = ske
+    self.m = None
+    self.scale = scale
+    self.yflip = yflip
+    self.yoff = yoff
+
+    # count how many objects of each type we generate.
+    self.stats = {}
+    if stats is not None: self.stats = stats
+    for s in ('pathList', 'pathString', 'objRect', 'objRoundedRect',
+              'objArc', 'objEllipse'):
+      self.stats[s] = 0
+
+  def _coord_from_svg(self, m=None):
+    xs = self.scale
+    ys = self.scale
+    if self.yflip: ys = -self.scale
+    if m is None: m = self.m
+    m.move(0, self.yoff, 0)
+    m.scale(xs, ys, 1)
+    return m
+
+  def _matrix_from_svg(self, svgmat, coordcvt=True):
+    """
+    Convert a 2D matrix from SVG into a FreeCAD 3D Matrix.
+    e.g. mat = [[0.9659258262890683, 0.25881904510252074, 0.0],
+               [-0.25881904510252074, 0.9659258262890683, 0.0]]
+
+    If coordcvt is True, then coordinate system conversion from
+    SVG to FreeCAD is applied to the matrix. Otherwise only datatype
+    conversion is performed.
+
+    Returns:
+    e.g. Matrix ((0.965926,0.258819,0,0),(-0.258819,0.965926,0,0),(0,0,1,0),(0,0,0,1))
+    """
+    # FIXME: is the handling of svgmat[*][2] correct?
+    self.m = Base.Matrix(svgmat[0][0], svgmat[0][1], 0, svgmat[0][2],
+                         svgmat[1][0], svgmat[1][1], 0, svgmat[1][2])
+
+    if coordcvt:
+      self._coord_from_svg()
+    return self.m
+
+
+  def _from_svg(self, x, y, m=None):
+    """
+    Converts a 2D Vector from SVG into a FreeCAD 3D vector applying Base.Matrix m.
+    """
+    if m is None: m = self.m
+    return m.multiply(Base.Vector(x, y, 0))
+
 
   def pathString(self, d, node, mat):
     """
@@ -100,7 +150,21 @@ class SketchPathGen(PathGenerator):
     print("not impl. objRoundedRect: ", x, y, w, h, rx, ry, node, mat)
 
   def objRect(self, x, y, w, h, node, mat):
-    print("not impl. objRect: ", x, y, w, h, node, mat)
+    self._matrix_from_svg(mat)
+    i = int(self.ske.GeometryCount)
+    ske.addGeometry([
+      Part.LineSegment(self._from_svg(x  ,y  ), self._from_svg(x+w,y  )),
+      Part.LineSegment(self._from_svg(x+w,y  ), self._from_svg(x+w,y+h)),
+      Part.LineSegment(self._from_svg(x+w,y+h), self._from_svg(x  ,y+h)),
+      Part.LineSegment(self._from_svg(x  ,y+h), self._from_svg(x  ,y  ))
+    ], False)
+    ske.addConstraint([
+      Sketcher.Constraint('Coincident',i+0,2, i+1,1),
+      Sketcher.Constraint('Coincident',i+1,2, i+2,1),
+      Sketcher.Constraint('Coincident',i+2,2, i+3,1),
+      Sketcher.Constraint('Coincident',i+3,2, i+0,1),
+    ])
+    self.stats['objRect'] += 1
 
   def objEllipse(self, cx, xy, rx, ry, node, mat):
     print("not impl. objEllipse: ", cx, xy, rx, ry, node, mat)
@@ -114,10 +178,11 @@ class SketchPathGen(PathGenerator):
 fcdoc = FreeCAD.newDocument(docname)
 ske = fcdoc.addObject('Sketcher::SketchObject', 'Sketch_'+docname)
 
-svg = InkSvg(pathgen=SketchPathGen(ske))
+gen_stats = {}
+svg = InkSvg(pathgen=SketchPathGen(ske, stats=gen_stats, scale=1.0, yflip=True, yoff=-100.0))
 svg.load(svgfile)       # respin of inkex.affect()
 selected = svg.getElementsByIds(options.ids)
- 
+
 ## FIXME: hide this in svg.traverse([ids...])
 if len(selected):
   # Traverse the selected objects
@@ -128,11 +193,11 @@ else:
   # Traverse the entire document building new, transformed paths
   svg.recursivelyTraverseSvg(svg.document.getroot(), svg.docTransform)
 
-print(svg.paths)        # do not use svg.paths here. Use the ske object!
+print(ske)
+print(gen_stats)
 
-##ske.addConstraint(con)
-#doc.recompute()
+#fcdoc.recompute()
 
-#doc.saveAs(fcstdfile)
-#print("%s written." % fcstdfile)
+fcdoc.saveAs(fcstdfile)
+print("%s written." % fcstdfile)
 

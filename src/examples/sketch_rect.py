@@ -45,7 +45,7 @@ def vec2d(x, y, m):
 (x, y, w, h) = (39.276257, 86.713783, 61.232143, 43.845234)
 # svg style matrix, with a 15deg rotation:
 m = matrix2d([[0.9659258262890683, 0.25881904510252074, 0.0], [-0.25881904510252074, 0.9659258262890683, 0.0]])
-m.move(50,0,0)  # inplace: move origin from top of SVG page to bottom of SVG page.
+m.move(0,50,0)  # inplace: move origin from top of SVG page to bottom of SVG page.
 m.scale(1,-1,1)  # inplace: flip the Y-Axis, SVG has left-handed coordinate system.
 
 i = int(ske.GeometryCount)
