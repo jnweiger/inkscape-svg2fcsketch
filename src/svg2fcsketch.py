@@ -17,6 +17,7 @@
 import os, sys, math, re
 from optparse import OptionParser
 verbose=0       # 0=quiet, 1=normal
+epsilon = 0.0000001
 
 
 sys.path.append('/usr/lib/freecad-daily/lib/')  # prefer daily over normal.
@@ -106,6 +107,7 @@ class SketchPathGen(PathGenerator):
               'objArc', 'objEllipse'):
       self.stats[s] = 0
 
+
   def _coord_from_svg(self, m=None):
     """
     Use SVG properties set by InkSVG.handleViewBox()
@@ -115,7 +117,7 @@ class SketchPathGen(PathGenerator):
     xs = 1.0
     if self._svg.docTransform is not None:
       xs = self._svg.docTransform[0][0]
-      if abs(xs) < 0.000001:
+      if abs(xs) < epsilon:
         xs = 1.0        # avoid divison by zero.
     ys = xs
     if self.yflip: ys = -ys
@@ -124,6 +126,7 @@ class SketchPathGen(PathGenerator):
     m.move(0, -self._svg.docHeight, 0)
     m.scale(1/xs, 1/ys, 1)
     return m
+
 
   def _matrix_from_svg(self, svgmat, coordcvt=True):
     """
@@ -156,11 +159,13 @@ class SketchPathGen(PathGenerator):
     self.bbox.add(v)
     return v
 
+
   def pathString(self, d, node, mat):
     """
     d is expected formatted as an svg path string here.
     """
     print("not impl. pathString: ", d, node, mat)
+
 
   def pathList(self, d, node, mat):
     """
@@ -175,8 +180,10 @@ class SketchPathGen(PathGenerator):
     print("GeometryCount changed from %d to %d" % (i, int(self.ske.GeometryCount)))
     print("not impl. simplePath: ", d, node, mat)
 
+
   def objRoundedRect(self, x, y, w, h, rx, ry, node, mat):
     print("not impl. objRoundedRect: ", x, y, w, h, rx, ry, node, mat)
+
 
   def objRect(self, x, y, w, h, node, mat):
     self._matrix_from_svg(mat)
@@ -197,8 +204,22 @@ class SketchPathGen(PathGenerator):
     ])
     self.stats['objRect'] += 1
 
-  def objEllipse(self, cx, xy, rx, ry, node, mat):
-    print("not impl. objEllipse: ", cx, xy, rx, ry, node, mat)
+
+  def objEllipse(self, cx, cy, rx, ry, node, mat):
+    self._matrix_from_svg(mat)
+    c = self._from_svg(cx, cy)
+    ori = self._from_svg(0, 0)
+    vrx = self._from_svg(rx, 0) - ori
+    vry = self._from_svg(0, ry) - ori
+    print( vrx.Length,  vry.Length, rx, ry)
+    if abs(vrx.Length - vry.Length) < epsilon:
+      # it is a circle.
+      ske.addGeometry([ Part.Circle(Center=c, Normal=Base.Vector(0,0,1), Radius=vrx.Length) ])
+      self.stats['objEllipse'] += 1
+    else:
+      # TBD
+      print("not impl. objEllipse: ", cx, cy, rx, ry, node, mat)
+
 
   def objArc(self, d, cx, cy, rx, ry, st, en, cl, node, mat):
     """
@@ -211,18 +232,7 @@ ske = fcdoc.addObject('Sketcher::SketchObject', 'Sketch_'+docname)
 
 svg = InkSvg(pathgen=SketchPathGen(ske, yflip=True))
 svg.load(svgfile)       # respin of inkex.affect()
-selected = svg.getElementsByIds(options.ids)
-
-## FIXME: hide this in svg.traverse([ids...])
-if len(selected):
-  # Traverse the selected objects
-  for node in selected:
-    transform = svg.recursivelyGetEnclosingTransform(node)
-    svg.recursivelyTraverseSvg([node], transform)
-else:
-  # Traverse the entire document building new, transformed paths
-  svg.recursivelyTraverseSvg(svg.document.getroot(), svg.docTransform)
-
+svg.traverse(options.ids)
 
 if verbose > 0:
   print("svg2fcsketch %s, InkSvg %s" % (__version__, InkSvg.__version__))
@@ -233,18 +243,19 @@ print(svg.stats)
 #fcdoc.recompute()
 
 fcdoc.saveAs(fcstdfile)
-## TODO: Add GuiDocument.xml to the zip archive of fcstdfile
+## Add GuiDocument.xml to the zip archive of fcstdfile
 ## to switch on default visibilitiy, and set a default camera.
 camera_xml = ''
-if True:
+if True:        # switch off, if this causes errors. Nice to have.
   bb = svg.pathgen.bbox
+  print(bb)
   cx = bb.Center.x   # 35.246845 # bbox center
   cy = bb.Center.y   # 37.463238 # bbox center
   cz = bb.DiagonalLength * 0.5  # 51.437702 # focal distance: 1/2 of bbox diagonal
   zd = cz * 0.001             # 0.05 # +/- for far/near distance
-  camera_xml = """<Camera settings="  OrthographicCamera {   viewportMapping ADJUST_CAMERA position %f %f %f orientation 0 0 1  0 nearDistance %f farDistance %f aspectRatio 1 focalDistance %f height %f } "/>""" % (cx,cy,cz, cz-zd, cz+zd, cz, 2*cz)
+  camera_xml = """<Camera settings="  OrthographicCamera { viewportMapping ADJUST_CAMERA position %f %f %f orientation 0 0 1  0 nearDistance %f farDistance %f aspectRatio 1 focalDistance %f height %f } "/>""" % (cx,cy,cz, cz-zd, cz+zd, cz, 2*cz)
 guidoc_xml = """<?xml version='1.0' encoding='utf-8'?>
-<Document SchemaVersion="1">
+<Document SchemaVersion="1"><!-- as seen in FreeCAD 0.17 -->
     <ViewProviderData Count="1">
         <ViewProvider name="%s" expanded="0">
             <Properties Count="1">
