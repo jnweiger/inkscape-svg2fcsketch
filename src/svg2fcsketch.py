@@ -172,7 +172,7 @@ class SketchPathGen(PathGenerator):
     d is expected as an [[cmd, [args]], ...] arrray
     """
     print(d, node, mat)
-    i = int(ske.GeometryCount)      # 0
+    i = int(self.ske.GeometryCount)      # 0
     geo = []
     geo.append(Part.LineSegment(Base.Vector(4,8,0),Base.Vector(9,8,0)))
     geo.append(Part.LineSegment(Base.Vector(9,8,0),Base.Vector(9,2,0)))
@@ -188,13 +188,13 @@ class SketchPathGen(PathGenerator):
   def objRect(self, x, y, w, h, node, mat):
     self._matrix_from_svg(mat)
     i = int(self.ske.GeometryCount)
-    ske.addGeometry([
+    self.ske.addGeometry([
       Part.LineSegment(self._from_svg(x  ,y  ), self._from_svg(x+w,y  )),
       Part.LineSegment(self._from_svg(x+w,y  ), self._from_svg(x+w,y+h)),
       Part.LineSegment(self._from_svg(x+w,y+h), self._from_svg(x  ,y+h)),
       Part.LineSegment(self._from_svg(x  ,y+h), self._from_svg(x  ,y  ))
     ], False)
-    ske.addConstraint([
+    self.ske.addConstraint([
       Sketcher.Constraint('Coincident', i+0,2, i+1,1),
       Sketcher.Constraint('Coincident', i+1,2, i+2,1),
       Sketcher.Constraint('Coincident', i+2,2, i+3,1),
@@ -211,14 +211,24 @@ class SketchPathGen(PathGenerator):
     ori = self._from_svg(0, 0)
     vrx = self._from_svg(rx, 0) - ori
     vry = self._from_svg(0, ry) - ori
-    print( vrx.Length,  vry.Length, rx, ry)
     if abs(vrx.Length - vry.Length) < epsilon:
       # it is a circle.
-      ske.addGeometry([ Part.Circle(Center=c, Normal=Base.Vector(0,0,1), Radius=vrx.Length) ])
+      self.ske.addGeometry([ Part.Circle(Center=c, Normal=Base.Vector(0,0,1), Radius=vrx.Length) ])
       self.stats['objEllipse'] += 1
     else:
-      # TBD
-      print("not impl. objEllipse: ", cx, cy, rx, ry, node, mat)
+      # major axis is defined by Center and S1,
+      # major radius is the distance between Center and S1,
+      # minor radius is the distance between S2 and the major axis.
+      s1 = self._from_svg(cx+rx, cy)
+      s2 = self._from_svg(cx, cy+ry)
+      print("FIXME: Wrong computation, the ellipsis is not long enough, and it is too fat.")
+      i = int(self.ske.GeometryCount)
+      self.ske.addGeometry([ Part.Ellipse(S1=s1, S2=s2, Center=c), ])
+      self.ske.exposeInternalGeometry(self.ske.GeometryCount-1)
+      self.ske.addGeometry([ Part.Circle(Center=s1, Normal=Base.Vector(0,0,1), Radius=4),
+                             Part.Circle(Center=s2, Normal=Base.Vector(0,0,1), Radius=6)
+         ], True)
+      self.stats['objEllipse'] += 1
 
 
   def objArc(self, d, cx, cy, rx, ry, st, en, cl, node, mat):

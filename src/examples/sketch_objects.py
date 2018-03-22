@@ -50,6 +50,8 @@ geo = [
     # FIXME: the angles are distroted according to the tangents of the contact point.
     # North is more like 5/8 pi but a bit less.
     Part.ArcOfEllipse(Part.Ellipse(App.Vector(8,-8,0),App.Vector(3,3,0),App.Vector(0,0,0)),-math.pi*(8+1.)/8, math.pi*(5./8))
+    #
+    # Part.Ellipse(App.Vector(8,-8,0),App.Vector(3,3,0),App.Vector(0,0,0))
 ]
 ske.addGeometry(geo, False)     # False: normal, True: blue construction
 ske.exposeInternalGeometry(i+5) # long and short axis, focal points of Ellipse
