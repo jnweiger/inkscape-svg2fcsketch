@@ -14,6 +14,8 @@
 #          silly version printing, that would ruin an inkscape extension.
 # V0.4 jw, Added GuiDocument.xml for visibility and camera defaults.
 #          Using BoundBox() to compute camera placement.
+# V0.5 jw, Ellipse() done correctly with _ellipse_vertices2d()
+#
 
 from optparse import OptionParser
 import os, sys, math, re
@@ -49,7 +51,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__))+'/../inksvg/src/')
 from inksvg import InkSvg, PathGenerator
 ## INLINE_BLOCK_END
 
-__version__ = '0.4'
+__version__ = '0.5'
 
 parser = OptionParser(usage="\n    %prog [options] SVGFILE [OUTFILE]\n\nTry --help for details.")
 parser.add_option("-o", "--outfile", dest="outfile",
@@ -135,7 +137,9 @@ class SketchPathGen(PathGenerator):
     Vectors are expected as FreeCAD Base.Vector() assuming that all Z=0.
 
     Using a computation derived from Rytz's construction as
-    seen in https://en.wikipedia.org/wiki/Rytz%27s_construction
+    seen in https://en.wikipedia.org/wiki/Rytz%27s_construction.
+    Returns (V1, V2, V3, V4) where V1-V4 is the diameter of the major axis
+    and V2-V3 is the diameter of the minor axis.
     """
     f0 = C
     f1 = P-C
@@ -156,7 +160,11 @@ class SketchPathGen(PathGenerator):
     V2 = p(t0 + 0.5*math.pi)
     V3 = p(t0 - 0.5*math.pi)
     V4 = p(t0 + math.pi)
+    if (V1-V4).Length < (V2-V3).Length:
+      # V1-V4 should be the major axis.
+      (V1,V4, V2,V3) = (V2,V3, V1,V4)
     return (V1, V2, V3, V4)
+
 
   def _decompose_matrix2d(self, m=None):
     """
@@ -210,13 +218,13 @@ class SketchPathGen(PathGenerator):
     return self.m
 
 
-  def _from_svg(self, x, y, m=None):
+  def _from_svg(self, x, y, m=None, bbox=True):
     """
     Converts a 2D Vector from SVG into a FreeCAD 3D vector applying Base.Matrix m.
     """
     if m is None: m = self.m
     v = m.multiply(Base.Vector(x, y, 0))
-    self.bbox.add(v)
+    if bbox: self.bbox.add(v)
     return v
 
 
@@ -267,56 +275,31 @@ class SketchPathGen(PathGenerator):
 
   def objEllipse(self, cx, cy, rx, ry, node, mat):
     self._matrix_from_svg(mat)
-    print("svg mat", mat)
-    print('elli2 transform="matrix(1,0,-0.26794919,1,79.58091,0)">')
-    print("fc mat", self.m)
-    c = self._from_svg(cx, cy)
-    ori = self._from_svg(0, 0)
-    vrx = self._from_svg(rx, 0) - ori
-    vry = self._from_svg(0, ry) - ori
+    c = self._from_svg(cx, cy, bbox=False)
+    ori = self._from_svg(0, 0, bbox=False)
+    vrx = self._from_svg(rx, 0, bbox=False) - ori
+    vry = self._from_svg(0, ry, bbox=False) - ori
     if abs(vrx.Length - vry.Length) < epsilon:
       # it is a circle.
+      self.bbox.add(c+vrx+vry)
+      self.bbox.add(c-vrx-vry)
       self.ske.addGeometry([ Part.Circle(Center=c, Normal=Base.Vector(0,0,1), Radius=vrx.Length) ])
       self.stats['objEllipse'] += 1
     else:
-      if True:
-        if rx > ry:
-          e = Part.Ellipse(c, rx, ry)
-        else:
-          e = Part.Ellipse(c, ry, rx)
-        (tr,sc,ro) = self._decompose_matrix2d()
-        m = Base.Matrix()
-        m.rotateZ(ro[0])
-        e.rotate(Base.Placement(m))
-        self.ske.addGeometry([ e ])
-        self.ske.exposeInternalGeometry(self.ske.GeometryCount-1)
-        s1 = self._from_svg(cx+rx, cy)
-        s2 = self._from_svg(cx, cy+ry)
-        self.ske.addGeometry([ Part.Circle(Center=s1, Normal=Base.Vector(0,0,1), Radius=4),
-                               Part.Circle(Center=s2, Normal=Base.Vector(0,0,1), Radius=6)
-           ], True)
-        self.stats['objEllipse'] += 1
-      else:
-        # major axis is defined by Center and S1,
-        # major radius is the distance between Center and S1,
-        # minor radius is the distance between S2 and the major axis.
-        s1 = self._from_svg(cx+rx, cy)
-        s2 = self._from_svg(cx, cy+ry)
-        print("s1 ", s1)
-        print("s2 ", s2)
-        print("c  ", c)
-        (tr,sc,ro) = self._decompose_matrix2d()
-        print("tr ", tr)
-        print("sc ", sc)
-        print("ro ", ro)
-        print("FIXME: Wrong computation, the ellipsis is not long enough, and it is too fat.")
-        i = int(self.ske.GeometryCount)
-        self.ske.addGeometry([ Part.Ellipse(S1=s1, S2=s2, Center=c), ])
-        self.ske.exposeInternalGeometry(self.ske.GeometryCount-1)
-        self.ske.addGeometry([ Part.Circle(Center=s1, Normal=Base.Vector(0,0,1), Radius=4),
-                               Part.Circle(Center=s2, Normal=Base.Vector(0,0,1), Radius=6)
-           ], True)
-        self.stats['objEllipse'] += 1
+      # major axis is defined by Center and S1,
+      # major radius is the distance between Center and S1,
+      # minor radius is the distance between S2 and the major axis.
+      s1 = self._from_svg(cx+rx, cy, bbox=False)
+      s2 = self._from_svg(cx, cy+ry, bbox=False)
+      (V1,V2,V3,V4) = self._ellipse_vertices2d(c, s1, s2)
+      self.bbox.add(V1)
+      self.bbox.add(V2)
+      self.bbox.add(V3)
+      self.bbox.add(V4)
+      i = int(self.ske.GeometryCount)
+      self.ske.addGeometry([ Part.Ellipse(S1=V1, S2=V2, Center=c), ])
+      self.ske.exposeInternalGeometry(self.ske.GeometryCount-1)
+      self.stats['objEllipse'] += 1
 
 
   def objArc(self, d, cx, cy, rx, ry, st, en, cl, node, mat):
