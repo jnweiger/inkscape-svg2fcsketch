@@ -14,7 +14,8 @@
 #          silly version printing, that would ruin an inkscape extension.
 # V0.4 jw, Added GuiDocument.xml for visibility and camera defaults.
 #          Using BoundBox() to compute camera placement.
-# V0.5 jw, Ellipse() done correctly with _ellipse_vertices2d()
+# V0.5 jw, objEllipse() done correctly with _ellipse_vertices2d()
+# V0.6 jw, objArc() done. ArcOfCircle() is a strange beast with rotation and mirroring.
 #
 
 from optparse import OptionParser
@@ -51,7 +52,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__))+'/../inksvg/src/')
 from inksvg import InkSvg, PathGenerator
 ## INLINE_BLOCK_END
 
-__version__ = '0.5'
+__version__ = '0.6'
 
 parser = OptionParser(usage="\n    %prog [options] SVGFILE [OUTFILE]\n\nTry --help for details.")
 parser.add_option("-o", "--outfile", dest="outfile",
@@ -274,11 +275,19 @@ class SketchPathGen(PathGenerator):
 
 
   def objEllipse(self, cx, cy, rx, ry, node, mat):
+    """
+    We distinguish two cases. If it looks like a circle (after transformation),
+    we produce a Circle, else we produce an Ellipse.
+    The difference is clearly visible as we exposeInternalGeometry() of the Ellipse.
+    """
+    ### CAUTION: Keep in sync with objArc() below.
     self._matrix_from_svg(mat)
     c = self._from_svg(cx, cy, bbox=False)
     ori = self._from_svg(0, 0, bbox=False)
     vrx = self._from_svg(rx, 0, bbox=False) - ori
     vry = self._from_svg(0, ry, bbox=False) - ori
+    i = int(self.ske.GeometryCount)
+
     if abs(vrx.Length - vry.Length) < epsilon:
       # it is a circle.
       self.bbox.add(c+vrx+vry)
@@ -296,16 +305,107 @@ class SketchPathGen(PathGenerator):
       self.bbox.add(V2)
       self.bbox.add(V3)
       self.bbox.add(V4)
-      i = int(self.ske.GeometryCount)
       self.ske.addGeometry([ Part.Ellipse(S1=V1, S2=V2, Center=c), ])
-      self.ske.exposeInternalGeometry(self.ske.GeometryCount-1)
+      self.ske.exposeInternalGeometry(i)
       self.stats['objEllipse'] += 1
 
 
-  def objArc(self, d, cx, cy, rx, ry, st, en, cl, node, mat):
+  def objArc(self, d, cx, cy, rx, ry, st, en, closed, node, mat):
     """
     We ignore the path d, and produce a nice arc object.
+    We distinguish two cases. If it looks like a circle, we produce ArcOfCircle,
+    else we produce ArcOfEllipse.
+
+    To find the arc end points, we use the value() property of the Circle and Ellipse
+    objects. With Circle we have to take care of mirror and rotation ourselves.
+
+    If closed, we connect the two ends to the center with lines. The connections
+    are secured with constraints.
+    Radii are currently not secured with constraints.
     """
+    ### CAUTION: Keep in sync with objEllipse() above.
+    # print("objArc: st,en,closed", st, en, closed)
+    self._matrix_from_svg(mat)
+    c = self._from_svg(cx, cy, bbox=False)
+    ori = self._from_svg(0, 0, bbox=False)
+    vrx = self._from_svg(rx, 0, bbox=False) - ori
+    vry = self._from_svg(0, ry, bbox=False) - ori
+    i = self.ske.GeometryCount
+    (st_idx,en_idx) = (1,2)
+
+    if abs(vrx.Length - vry.Length) < epsilon:
+      # it is a circle.
+      self.bbox.add(c+vrx+vry)
+      self.bbox.add(c-vrx-vry)
+      ce = Part.Circle(Center=c, Normal=Base.Vector(0,0,1), Radius=vrx.Length)
+
+      # Circles are immune to rotation and mirorring. Apply this manually.
+      if self.yflip:
+        (st,en) = (-en,-st)                     ## coord system is mirrored.
+      else:
+        (st,en) = (en,st)                       ## hmm.
+        print("FIXME: ArcOfCircle() with yflip=False needs debugging.")
+      r = Base.Matrix()
+      r.rotateZ(st)
+      pst = r.multiply(vrx)
+      st = pst.getAngle(Base.Vector(1,0,0))     # ce.rotateZ() is a strange beast.
+      pst = pst + c
+      r = Base.Matrix()
+      r.rotateZ(en)
+      pen = r.multiply(vrx)
+      en = pen.getAngle(Base.Vector(1,0,0))     # ce.rotateZ() is a strange beast.
+      pen = pen + c
+
+      self.ske.addGeometry([ Part.ArcOfCircle(ce, st, en) ])
+      self.stats['objArc'] += 1
+
+    else:
+      # major axis is defined by Center and S1,
+      # major radius is the distance between Center and S1,
+      # minor radius is the distance between S2 and the major axis.
+      s1 = self._from_svg(cx+rx, cy, bbox=False)
+      s2 = self._from_svg(cx, cy+ry, bbox=False)
+      (V1,V2,V3,V4) = self._ellipse_vertices2d(c, s1, s2)
+      self.bbox.add(V1)
+      self.bbox.add(V2)
+      self.bbox.add(V3)
+      self.bbox.add(V4)
+      i = int(self.ske.GeometryCount)
+      ce = Part.Ellipse(S1=V1, S2=V2, Center=c)
+      self.ske.addGeometry([ Part.ArcOfEllipse(ce, st, en) ])
+      self.ske.exposeInternalGeometry(i)
+      self.stats['objArc'] += 1
+      ## CAUTION: with yflip=True sketcher reverses the endpoints of
+      ##          an ArcOfEllipse to: en=1, st=2
+      ##          ArcOfCircle seems unaffected.
+      if self.yflip: (st_idx,en_idx) = (2,1)
+      r = Base.Matrix()
+      r.rotateZ(st)
+      pst = r.multiply(vrx) + c
+      r = Base.Matrix()
+      r.rotateZ(en)
+      pen = r.multiply(vrx) + c
+
+    j = self.ske.GeometryCount
+    if closed:
+      self.ske.addGeometry([
+        Part.LineSegment(ce.value(en),c),
+        Part.LineSegment(c,ce.value(st)) ])
+
+      if True:          # when debugging deformations, switch off constriants first.
+        self.ske.addConstraint([
+          Sketcher.Constraint('Coincident', i+0,en_idx, j+0,1),   # arc with line
+          Sketcher.Constraint('Coincident', j+1,2, i+0,st_idx),   # line with arc
+          Sketcher.Constraint('Coincident', j+0,2, j+1,1),        # line with line
+          Sketcher.Constraint('Coincident', j+0,2, i+0,3) ])      # line with center
+
+    if False:    # some debugging circles.
+      self.ske.addGeometry([
+        # Part.Circle(Center=pst, Normal=Base.Vector(0,0,1), Radius=2),
+        # Part.Circle(Center=pen, Normal=Base.Vector(0,0,1), Radius=3),
+        # Part.Circle(Center=ce.value(st), Normal=Base.Vector(0,0,1), Radius=4),
+        Part.Circle(Center=ce.value(en), Normal=Base.Vector(0,0,1), Radius=5)
+        ], True)
 
 
 fcdoc = FreeCAD.newDocument(docname)
