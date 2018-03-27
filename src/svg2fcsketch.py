@@ -251,7 +251,7 @@ class SketchPathGen(PathGenerator):
 
 
   def objRoundedRect(self, x, y, w, h, rx, ry, node, mat):
-    print("not impl. objRoundedRect: ", x, y, w, h, rx, ry, node, mat)
+    print("not impl. objRoundedRect: ", x, y, w, h, rx, ry, node.get('id'), mat)
 
 
   def objRect(self, x, y, w, h, node, mat):
