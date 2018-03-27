@@ -251,6 +251,77 @@ class SketchPathGen(PathGenerator):
 
 
   def objRoundedRect(self, x, y, w, h, rx, ry, node, mat):
+    """
+    Construct four arcs, one for each corner, and 
+    connect them with line segments, if space permits.
+    Connect them directly otherwise.
+    """
+    if rx == 0: rx = ry
+    if ry == 0: ry = rx
+    if rx < epsilon or ry < epsilon:
+      return self.objRect(x, y, w, h, node, mat)
+    if 2*rx > w: rx = 0.5*w
+    if 2*ry > h: ry = 0.5*h
+
+    self._matrix_from_svg(mat)
+    i = int(self.ske.GeometryCount)
+    ske.addGeometry([
+      # outline of the box
+      Part.LineSegment(self._from_svg(x  ,y  ), self._from_svg(x+w,y  )),               # 0
+      Part.LineSegment(self._from_svg(x+w,y  ), self._from_svg(x+w,y+h)),               # 1
+      Part.LineSegment(self._from_svg(x+w,y+h), self._from_svg(x  ,y+h)),               # 2
+      Part.LineSegment(self._from_svg(x  ,y+h), self._from_svg(x  ,y  )),               # 3
+      # four corners
+      Part.LineSegment(self._from_svg(x+rx,y   ), self._from_svg(x+rx,y+ry)),           # 4
+      Part.LineSegment(self._from_svg(x+rx,y+ry), self._from_svg(x   ,y+ry)),           # 5
+      Part.LineSegment(self._from_svg(x+w-rx,y   ), self._from_svg(x+w-rx,y+ry)),       # 6
+      Part.LineSegment(self._from_svg(x+w-rx,y+ry), self._from_svg(x+w   ,y+ry)),       # 7
+      Part.LineSegment(self._from_svg(x+w-rx,y+h   ), self._from_svg(x+w-rx,y+h-ry)),   # 8
+      Part.LineSegment(self._from_svg(x+w-rx,y+h-ry), self._from_svg(x+w   ,y+h-ry)),   # 9
+      Part.LineSegment(self._from_svg(x+rx,y+h   ), self._from_svg(x+rx,y+h-ry)),       # 10
+      Part.LineSegment(self._from_svg(x+rx,y+h-ry), self._from_svg(x   ,y+h-ry))        # 11
+    ], True)
+    self.ske.addConstraint([
+      ## outer construction corners
+      Sketcher.Constraint('Coincident', i+0,2, i+1,1),
+      Sketcher.Constraint('Coincident', i+1,2, i+2,1),
+      Sketcher.Constraint('Coincident', i+2,2, i+3,1),
+      Sketcher.Constraint('Coincident', i+3,2, i+0,1),
+      ## inner construction corners
+      Sketcher.Constraint('Coincident', i+4,2, i+5,1),
+      Sketcher.Constraint('Coincident', i+6,2, i+7,1),
+      Sketcher.Constraint('Coincident', i+8,2, i+9,1),
+      Sketcher.Constraint('Coincident', i+10,2, i+11,1),
+      ## inner construction equality
+      Sketcher.Constraint('Equal', i+4, i+6),
+      Sketcher.Constraint('Equal', i+4, i+8),
+      Sketcher.Constraint('Equal', i+4, i+10),
+      Sketcher.Constraint('Equal', i+5, i+7),
+      Sketcher.Constraint('Equal', i+5, i+9),
+      Sketcher.Constraint('Equal', i+5, i+11),
+      ## corner cube outlines construction
+      Sketcher.Constraint('PointOnObject',i+4,1, i+0),
+      Sketcher.Constraint('PointOnObject',i+5,2, i+3),
+      Sketcher.Constraint('PointOnObject',i+6,1, i+0),
+      Sketcher.Constraint('PointOnObject',i+7,2, i+1),
+      Sketcher.Constraint('PointOnObject',i+8,1, i+2),
+      Sketcher.Constraint('PointOnObject',i+9,2, i+1),
+      Sketcher.Constraint('PointOnObject',i+10,1, i+2),
+      Sketcher.Constraint('PointOnObject',i+11,2, i+3),
+      ## horizontal construction
+      Sketcher.Constraint('Parallel', i, i+2),
+      Sketcher.Constraint('Parallel', i, i+5),
+      Sketcher.Constraint('Parallel', i, i+7),
+      Sketcher.Constraint('Parallel', i, i+9),
+      Sketcher.Constraint('Parallel', i, i+11),
+      ## vertical construction
+      Sketcher.Constraint('Parallel', i+1, i+3),
+      Sketcher.Constraint('Parallel', i+1, i+4),
+      Sketcher.Constraint('Parallel', i+1, i+6),
+      Sketcher.Constraint('Parallel', i+1, i+8),
+      Sketcher.Constraint('Parallel', i+1, i+10)
+    ])
+    self.stats['objRect'] += 1
     print("not impl. objRoundedRect: ", x, y, w, h, rx, ry, node.get('id'), mat)
 
 
