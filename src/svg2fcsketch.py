@@ -7,6 +7,7 @@
 #  https://github.com/FreeCAD/FreeCAD/blob/master/src/Mod/Sketcher/TestSketcherApp.py
 #  /usr/lib/freecad-daily/Mod/Sketcher/SketcherExample.py
 #  https://en.wikipedia.org/wiki/Rytz%27s_construction#Computer_aided_solution
+#  http://wiki.inkscape.org/wiki/index.php/Python_modules_for_extensions
 #
 # v0.1 jw, initial draft refactoring inksvg to make it fit here.
 # v0.2 jw, Introducing class SketchPathGen to seperate the sketch generator from the svg parser.
@@ -25,7 +26,7 @@ sys.path.append('/usr/lib/freecad-daily/lib/')  # prefer daily over normal.
 sys.path.append('/usr/lib/freecad/lib/')
 
 verbose=0       # 0=quiet, 1=normal
-epsilon = 0.0000001
+epsilon = 0.00001
 
 if verbose == 0:
   os.dup2(1,99)         # hack to avoid silly version string printing.
@@ -260,18 +261,20 @@ class SketchPathGen(PathGenerator):
     if ry == 0: ry = rx
     if rx < epsilon or ry < epsilon:
       return self.objRect(x, y, w, h, node, mat)
-    if 2*rx > w: rx = 0.5*w
-    if 2*ry > h: ry = 0.5*h
+    if 2*rx > w-epsilon: rx = 0.5*(w-epsilon)   # avoid Part.OCCError: Both points are equal" on LineSegment #12
+    if 2*ry > h-epsilon: ry = 0.5*(h-epsilon)
+
+    print("objRoundedRect: ", x, y, w, h, rx, ry, node.get('id'), mat)
 
     self._matrix_from_svg(mat)
     i = int(self.ske.GeometryCount)
     ske.addGeometry([
-      # outline of the box
+      # construction outline of the box
       Part.LineSegment(self._from_svg(x  ,y  ), self._from_svg(x+w,y  )),               # 0
       Part.LineSegment(self._from_svg(x+w,y  ), self._from_svg(x+w,y+h)),               # 1
       Part.LineSegment(self._from_svg(x+w,y+h), self._from_svg(x  ,y+h)),               # 2
       Part.LineSegment(self._from_svg(x  ,y+h), self._from_svg(x  ,y  )),               # 3
-      # four corners
+      # construction four corners
       Part.LineSegment(self._from_svg(x+rx,y   ), self._from_svg(x+rx,y+ry)),           # 4
       Part.LineSegment(self._from_svg(x+rx,y+ry), self._from_svg(x   ,y+ry)),           # 5
       Part.LineSegment(self._from_svg(x+w-rx,y   ), self._from_svg(x+w-rx,y+ry)),       # 6
@@ -321,8 +324,55 @@ class SketchPathGen(PathGenerator):
       Sketcher.Constraint('Parallel', i+1, i+8),
       Sketcher.Constraint('Parallel', i+1, i+10)
     ])
+    ske.addGeometry([
+      # sides of the rect
+      Part.LineSegment(self._from_svg(x+rx  ,y     ), self._from_svg(x+w-rx,y     )),   # 12
+      Part.LineSegment(self._from_svg(x+w   ,y+ry  ), self._from_svg(x+w   ,y+h-ry)),   # 13
+      Part.LineSegment(self._from_svg(x+w-rx,y+h   ), self._from_svg(x+rx  ,y+h   )),   # 14
+      Part.LineSegment(self._from_svg(x     ,y+h-ry), self._from_svg(x     ,y+ry  ))    # 15
+    ])
+    # arcs top left, top right, botton right, bottom left.
+    # circles rotate counter clockwise. pi/2 is north, pi is west, 2*pi is east
+    a_tl = self.objArc("", x+rx  , y+ry,   rx, ry, -2/2.*math.pi, -1/2.*math.pi, False, node, mat)
+    a_tr = self.objArc("", x-rx+w, y+ry,   rx, ry, -1/2.*math.pi,  0/2.*math.pi, False, node, mat)
+    a_br = self.objArc("", x-rx+w, y-ry+h, rx, ry,  0/2.*math.pi,  1/2.*math.pi, False, node, mat)
+    a_bl = self.objArc("", x+rx  , y-ry+h, rx, ry,  1/2.*math.pi,  2/2.*math.pi, False, node, mat)
+    if False:
+      self.ske.addConstraint([
+        # connect the corners to the edges. smooth
+        Sketcher.Constraint('Tangent', a_tl[1][0],a_tl[1][1], i+12,1),
+        Sketcher.Constraint('Tangent', i+12,2, a_tr[0][0],a_tr[0][1]),
+        Sketcher.Constraint('Tangent', a_tr[1][0],a_tr[1][1], i+13,1),
+        Sketcher.Constraint('Tangent', i+13,2, a_br[0][0],a_br[0][1]),
+        Sketcher.Constraint('Tangent', a_br[1][0],a_br[1][1], i+14,1),
+        Sketcher.Constraint('Tangent', i+14,2, a_bl[0][0],a_bl[0][1]),
+        Sketcher.Constraint('Tangent', a_bl[1][0],a_bl[1][1], i+15,1),
+        Sketcher.Constraint('Tangent', i+15,2, a_tl[0][0],a_bl[0][1]),
+      ])
+    if False:
+      self.ske.addConstraint([
+        # stitch the rounded rect to the construction grid
+        Sketcher.Constraint('Coincident', i+12,1, i+4,1),
+        Sketcher.Constraint('Coincident', i+12,2, i+6,1),
+        Sketcher.Constraint('Coincident', i+13,1, i+7,2),
+        Sketcher.Constraint('Coincident', i+13,2, i+9,2),
+        Sketcher.Constraint('Coincident', i+14,1, i+8,1),
+        Sketcher.Constraint('Coincident', i+14,2, i+10,1),
+        Sketcher.Constraint('Coincident', i+15,1, i+11,2),
+        Sketcher.Constraint('Coincident', i+15,2, i+5,2)
+      ])
+    if False and a_tr[3] is not None:         # ArcOfCirle has no majAxis
+      self.ske.addConstraint([
+        # make all major axis parallel, and same length
+        Sketcher.Constraint('Parallel', a_tr[3], a_tl[3]),
+        Sketcher.Constraint('Equal',    a_tr[3], a_tl[3]),
+        Sketcher.Constraint('Parallel', a_tr[3], a_bl[3]),
+        Sketcher.Constraint('Equal',    a_tr[3], a_bl[3]),
+        Sketcher.Constraint('Parallel', a_tr[3], a_br[3]),
+        # Sketcher.Constraint('Equal',    a_tr[3], a_br[3])     # makes everything immobole
+      ])
+
     self.stats['objRect'] += 1
-    print("not impl. objRoundedRect: ", x, y, w, h, rx, ry, node.get('id'), mat)
 
 
   def objRect(self, x, y, w, h, node, mat):
@@ -403,6 +453,7 @@ class SketchPathGen(PathGenerator):
     vry = self._from_svg(0, ry, bbox=False) - ori
     i = self.ske.GeometryCount
     (st_idx,en_idx) = (1,2)
+    majAxisIdx = None
 
     if abs(vrx.Length - vry.Length) < epsilon:
       # it is a circle.
@@ -445,6 +496,7 @@ class SketchPathGen(PathGenerator):
       ce = Part.Ellipse(S1=V1, S2=V2, Center=c)
       self.ske.addGeometry([ Part.ArcOfEllipse(ce, st, en) ])
       self.ske.exposeInternalGeometry(i)
+      majAxisIdx = i+1          # CAUTION: is that a safe assumption?
       self.stats['objArc'] += 1
       ## CAUTION: with yflip=True sketcher reverses the endpoints of
       ##          an ArcOfEllipse to: en=1, st=2
@@ -477,6 +529,9 @@ class SketchPathGen(PathGenerator):
         # Part.Circle(Center=ce.value(st), Normal=Base.Vector(0,0,1), Radius=4),
         Part.Circle(Center=ce.value(en), Normal=Base.Vector(0,0,1), Radius=5)
         ], True)
+
+    # we return the start, end and center points, as triple (sketcher_index, sketcher_index_point, Vector)
+    return ((i+0, st_idx, ce.value(st)), (i+0, en_idx, ce.value(en)), (i+0, 3, c), majAxisIdx)
 
 
 fcdoc = FreeCAD.newDocument(docname)
