@@ -8,6 +8,8 @@
 #  /usr/lib/freecad-daily/Mod/Sketcher/SketcherExample.py
 #  https://en.wikipedia.org/wiki/Rytz%27s_construction#Computer_aided_solution
 #  http://wiki.inkscape.org/wiki/index.php/Python_modules_for_extensions
+#  https://en.wikipedia.org/wiki/Composite_B%C3%A9zier_curve
+#  https://en.wikipedia.org/wiki/B-spline#Relationship_to_piecewise/composite_B%C3%A9zier
 #
 # v0.1 jw, initial draft refactoring inksvg to make it fit here.
 # v0.2 jw, Introducing class SketchPathGen to seperate the sketch generator from the svg parser.
@@ -17,10 +19,21 @@
 #          Using BoundBox() to compute camera placement.
 # V0.5 jw, objEllipse() done correctly with _ellipse_vertices2d()
 # V0.6 jw, objArc() done. ArcOfCircle() is a strange beast with rotation and mirroring.
+# V0.7 jw, pathString() done.
 #
 
 from optparse import OptionParser
 import os, sys, math, re
+
+sys_platform = sys.platform.lower()
+if sys_platform.startswith('win'):
+  sys.path.append('C:\Program Files\Inkscape\share\extensions')
+elif sys_platform.startswith('darwin'):
+  sys.path.append('~/.config/inkscape/extensions')
+else:   # Linux
+  sys.path.append('/usr/share/inkscape/extensions/')
+
+import cubicsuperpath
 
 sys.path.append('/usr/lib/freecad-daily/lib/')  # prefer daily over normal.
 sys.path.append('/usr/lib/freecad/lib/')
@@ -53,7 +66,7 @@ sys.path.append(os.path.abspath(os.path.dirname(__file__))+'/../inksvg/src/')
 from inksvg import InkSvg, PathGenerator
 ## INLINE_BLOCK_END
 
-__version__ = '0.6'
+__version__ = '0.7'
 
 parser = OptionParser(usage="\n    %prog [options] SVGFILE [OUTFILE]\n\nTry --help for details.")
 parser.add_option("-o", "--outfile", dest="outfile",
@@ -65,9 +78,6 @@ parser.add_option("--selected-nodes", dest="selected_nodes",
                         action="append", type="string", default=[],
                         help="id:subpath:position of selected nodes, if any")
                         # TODO: check if inkscape is really passing us these
-parser.add_option('--smoothness', dest='smoothness',
-                        type='float', default=float(0.2), action='store',
-                        help='Curve smoothing (less for more [0.0001 .. 5]). Default: 0.2')
 parser.add_option("-V", "--version",
                          action="store_true", dest="version", default=False,
                          help="Print version numbers only.")
@@ -229,12 +239,83 @@ class SketchPathGen(PathGenerator):
     if bbox: self.bbox.add(v)
     return v
 
+  def _same_point(self, p1, p2, eps=epsilon):
+    if p1 is None or p2 is None: return True
+    if abs(p1[0]-p2[0]) > eps: return False
+    if abs(p1[1]-p2[1]) > eps: return False
+    return True
+
+    """
+    addGeometry(Part.Circle(App.Vector(-85,192,0),App.Vector(0,0,1),10),True)    # 3
+    addGeometry(Part.Circle(App.Vector(-107,160,0),App.Vector(0,0,1),10),True)   # 4
+    addConstraint(Sketcher.Constraint('Radius',3,7.000000)) 
+    addConstraint(Sketcher.Constraint('Equal',3,4)) 
+    addGeometry(Part.Circle(App.Vector(-20,161,0),App.Vector(0,0,1),10),True)    # 5
+    addConstraint(Sketcher.Constraint('Equal',3,5)) 
+    addGeometry(Part.Circle(App.Vector(-42,193,0),App.Vector(0,0,1),10),True)    # 6
+    addConstraint(Sketcher.Constraint('Equal',3,6)) 
+    addGeometry(Part.BSplineCurve([App.Vector(-85,192),App.Vector(-107,160),App.Vector(-20,161),App.Vector(-42,193)],
+                None,None,False,3,None,False),False)
+    
+    Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',3,3,7,0)
+    Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',4,3,7,1)
+    Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',5,3,7,2)
+    Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',6,3,7,3)
+    exposeInternalGeometry(7) # 7
+    """
 
   def pathString(self, d, node, mat):
     """
     d is expected formatted as an svg path string here.
+    d = "M 30.994048,129.93452 72.571427,88.357143 V 129.93452 H 127" means
+    path = [
+      [
+        #       handle_0                 point                handle_1
+        [[30.994048, 129.93452], [30.994048, 129.93452], [30.994048, 129.93452]],
+        [[72.571427, 88.357143], [72.571427, 88.357143], [72.571427, 88.357143]],
+        [[72.571427, 129.93452], [72.571427, 129.93452], [72.571427, 129.93452]],
+        [[127.0, 129.93452],     [127.0, 129.93452],     [127.0, 129.93452]]
+      ]
+    ]
     """
-    print("not impl. pathString: ", d, node, mat)
+    self._matrix_from_svg(mat)
+    path = cubicsuperpath.parsePath(d)
+    for sp in path:
+      # These are the off by one's: four points -> three lines -> two constraints.
+      prev_idx = None
+      j = 0
+      while j < len(sp)-1:
+        # lists of three, http://wiki.inkscape.org/wiki/index.php/Python_modules_for_extensions#cubicsuperpath.py
+        (h0,p1,h1) = sp[j]      
+        j = j+1
+        while j < len(sp):
+          (h2,p2,h3) = sp[j]
+          if not self._same_point(p1, p2):
+            break               # no null-segments, please!
+          j += 1
+        if j >= len(sp):
+          break                 # nothing left.
+        
+        if self._same_point(h1, p1) and self._same_point(h2, p2):
+          # it is a straigth line
+          i = int(self.ske.GeometryCount)
+          self.ske.addGeometry([Part.LineSegment(self._from_svg(p1[0], p1[1]), self._from_svg(p2[0], p2[1]))])
+        else:
+          # it is a spline
+          print("spline half. control points not visualized, not constaint", p1, h1, h2, p2)
+          i = int(self.ske.GeometryCount)
+          self.ske.addGeometry([Part.BSplineCurve([
+            self._from_svg(p1[0], p1[1]),
+            self._from_svg(h1[0], h1[1]),
+            self._from_svg(h2[0], h2[1]),
+            self._from_svg(p2[0], p2[1])
+            ], None,None,False,3,None,False),False])
+          self.ske.exposeInternalGeometry(i)
+        # more internal geometry ...
+        if prev_idx is not None:
+          self.ske.addConstraint([Sketcher.Constraint('Coincident', prev_idx,2, i,1)])
+        prev_idx = i
+      self.stats['pathString'] += 1     # count subpaths
 
 
   def pathList(self, d, node, mat):
