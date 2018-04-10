@@ -245,18 +245,33 @@ class SketchPathGen(PathGenerator):
     if abs(p1[1]-p2[1]) > eps: return False
     return True
 
+  def _average_handle_length(self, sp):
+    tot = 0
+    cnt = 0
+    for tri in sp:
+      (h1, p, h2) = tri
+      if not self._same_point(h1, p):
+        len += math.sqrt( (h1[0]-p[0])*(h1[0]-p[0]) + (h1[1]-p[1])*(h1[1]-p[1]) )
+        cnt += 1
+      if not self._same_point(h2, p):
+        len += math.sqrt( (h2[0]-p[0])*(h2[0]-p[0]) + (h2[1]-p[1])*(h2[1]-p[1]) )
+        cnt += 1
+    if (cnt > 0 and len > 0):
+      ## FIXME: nice rounding here, please!
+      return len/cnt
+    return 10
     """
     addGeometry(Part.Circle(App.Vector(-85,192,0),App.Vector(0,0,1),10),True)    # 3
     addGeometry(Part.Circle(App.Vector(-107,160,0),App.Vector(0,0,1),10),True)   # 4
-    addConstraint(Sketcher.Constraint('Radius',3,7.000000)) 
-    addConstraint(Sketcher.Constraint('Equal',3,4)) 
+    addConstraint(Sketcher.Constraint('Radius',3,7.000000))
+    addConstraint(Sketcher.Constraint('Equal',3,4))
     addGeometry(Part.Circle(App.Vector(-20,161,0),App.Vector(0,0,1),10),True)    # 5
-    addConstraint(Sketcher.Constraint('Equal',3,5)) 
+    addConstraint(Sketcher.Constraint('Equal',3,5))
     addGeometry(Part.Circle(App.Vector(-42,193,0),App.Vector(0,0,1),10),True)    # 6
-    addConstraint(Sketcher.Constraint('Equal',3,6)) 
+    addConstraint(Sketcher.Constraint('Equal',3,6))
     addGeometry(Part.BSplineCurve([App.Vector(-85,192),App.Vector(-107,160),App.Vector(-20,161),App.Vector(-42,193)],
                 None,None,False,3,None,False),False)
-    
+
     Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',3,3,7,0)
     Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',4,3,7,1)
     Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',5,3,7,2)
@@ -283,10 +298,14 @@ class SketchPathGen(PathGenerator):
     for sp in path:
       # These are the off by one's: four points -> three lines -> two constraints.
       prev_idx = None
+      last_circ = None
+      first_circ_idx = None
+      last_circ_idx = None
+      circ_r = 0.2 * self._average_handle_length(sp)
       j = 0
       while j < len(sp)-1:
         # lists of three, http://wiki.inkscape.org/wiki/index.php/Python_modules_for_extensions#cubicsuperpath.py
-        (h0,p1,h1) = sp[j]      
+        (h0,p1,h1) = sp[j]
         j = j+1
         while j < len(sp):
           (h2,p2,h3) = sp[j]
@@ -295,26 +314,70 @@ class SketchPathGen(PathGenerator):
           j += 1
         if j >= len(sp):
           break                 # nothing left.
-        
+
         if self._same_point(h1, p1) and self._same_point(h2, p2):
           # it is a straigth line
-          i = int(self.ske.GeometryCount)
+          idx = int(self.ske.GeometryCount)
           self.ske.addGeometry([Part.LineSegment(self._from_svg(p1[0], p1[1]), self._from_svg(p2[0], p2[1]))])
         else:
           # it is a spline
-          print("spline half. control points not visualized, not constaint", p1, h1, h2, p2)
-          i = int(self.ske.GeometryCount)
+          idx = int(self.ske.GeometryCount)
           self.ske.addGeometry([Part.BSplineCurve([
             self._from_svg(p1[0], p1[1]),
             self._from_svg(h1[0], h1[1]),
             self._from_svg(h2[0], h2[1]),
             self._from_svg(p2[0], p2[1])
             ], None,None,False,3,None,False),False])
-          self.ske.exposeInternalGeometry(i)
-        # more internal geometry ...
+          self.ske.exposeInternalGeometry(idx)
+          print("spline half. control points not visualized, not constaint", p1, h1, h2, p2)
+          # more internal geometry ...
+
+          if last_circ is None or not self._same_point(p1, last_circ):
+            p1_idx = int(self.ske.GeometryCount)
+            self.ske.addGeometry(Part.Circle(self._from_svg(p1[0], p1[1]), App.Vector(0,0,1), circ_r),True)
+            if first_circ_idx is None:
+              first_circ_idx = p1_idx
+            else:
+              self.ske.addConstraint(Sketcher.Constraint('Equal', first_circ_idx, p1_idx))
+            last_circ = p1
+            last_circ_idx = p1_idx
+          else:
+            p1_idx = last_circ_idx
+
+          if last_circ is None or not self._same_point(h1, last_circ):
+            h1_idx = int(self.ske.GeometryCount)
+            self.ske.addGeometry(Part.Circle(self._from_svg(h1[0], h1[1]), App.Vector(0,0,1), circ_r),True)
+            self.ske.addConstraint(Sketcher.Constraint('Equal', first_circ_idx, h1_idx))
+          else:
+            h1_idx = p1_idx
+
+          if not self._same_point(p1, p2):
+            p2_idx = int(self.ske.GeometryCount)
+            self.ske.addGeometry(Part.Circle(self._from_svg(p2[0], p2[1]), App.Vector(0,0,1), circ_r),True)
+            self.ske.addConstraint(Sketcher.Constraint('Equal', first_circ_idx, p2_idx))
+            last_circ = p2
+            last_circ_idx = p2_idx
+          else:
+            p2_idx = p1_idx
+
+          if not self._same_point(p2, h2):
+            h2_idx = int(self.ske.GeometryCount)
+            self.ske.addGeometry(Part.Circle(self._from_svg(h2[0], h2[1]), App.Vector(0,0,1), circ_r),True)
+            self.ske.addConstraint(Sketcher.Constraint('Equal', first_circ_idx, h2_idx))
+          else:
+            h2_idx = p2_idx
+
+          self.ske.addConstraint([
+            Sketcher.Constraint('Radius', first_circ_idx,3,circ_r),
+            Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', p1_idx,3, idx,0),
+            Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', h1_idx,3, idx,1),
+            Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', h2_idx,3, idx,2),
+            Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', p2_idx,3, idx,3)
+            ])
+
         if prev_idx is not None:
-          self.ske.addConstraint([Sketcher.Constraint('Coincident', prev_idx,2, i,1)])
-        prev_idx = i
+          self.ske.addConstraint([Sketcher.Constraint('Coincident', prev_idx,2, idx,1)])
+        prev_idx = idx
       self.stats['pathString'] += 1     # count subpaths
 
 
@@ -334,7 +397,7 @@ class SketchPathGen(PathGenerator):
 
   def objRoundedRect(self, x, y, w, h, rx, ry, node, mat):
     """
-    Construct four arcs, one for each corner, and 
+    Construct four arcs, one for each corner, and
     connect them with line segments, if space permits.
     Connect them directly otherwise.
     """
