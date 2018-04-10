@@ -84,6 +84,9 @@ parser.add_option("-V", "--version",
 parser.add_option("-v", "--verbose",
                          action="store_true", dest="verbose", default=False,
                          help="Be verbose. Default: silent.")
+parser.add_option("-e", "--expose-internal-geometry",
+                         action="store_true", dest="expose_internal_geometry", default=False,
+                         help="Expose internal geometry for Splines and Ellipses. Default: False.")
 (options, args) = parser.parse_args()
 
 if options.version:
@@ -110,10 +113,11 @@ class SketchPathGen(PathGenerator):
   """
   Generate XML code for a FreeCAD sketch.
   """
-  def __init__(self, ske, yflip=True):
+  def __init__(self, ske, yflip=True, expose_int=True):
     self.ske = ske
     self.m = None
     self.yflip = yflip
+    self.expose_int = expose_int
     self.bbox = BoundBox()
 
     # prepare counters how many objects of each type we generate.
@@ -251,14 +255,14 @@ class SketchPathGen(PathGenerator):
     for tri in sp:
       (h1, p, h2) = tri
       if not self._same_point(h1, p):
-        len += math.sqrt( (h1[0]-p[0])*(h1[0]-p[0]) + (h1[1]-p[1])*(h1[1]-p[1]) )
+        tot += math.sqrt( (h1[0]-p[0])*(h1[0]-p[0]) + (h1[1]-p[1])*(h1[1]-p[1]) )
         cnt += 1
       if not self._same_point(h2, p):
-        len += math.sqrt( (h2[0]-p[0])*(h2[0]-p[0]) + (h2[1]-p[1])*(h2[1]-p[1]) )
+        tot += math.sqrt( (h2[0]-p[0])*(h2[0]-p[0]) + (h2[1]-p[1])*(h2[1]-p[1]) )
         cnt += 1
-    if (cnt > 0 and len > 0):
+    if (cnt > 0 and tot > 0):
       ## FIXME: nice rounding here, please!
-      return len/cnt
+      return tot/cnt
     return 10
     """
     addGeometry(Part.Circle(App.Vector(-85,192,0),App.Vector(0,0,1),10),True)    # 3
@@ -293,6 +297,7 @@ class SketchPathGen(PathGenerator):
       ]
     ]
     """
+    print("FIXME: reduce number of control points. Do not coincide with end points!")
     self._matrix_from_svg(mat)
     path = cubicsuperpath.parsePath(d)
     for sp in path:
@@ -328,9 +333,9 @@ class SketchPathGen(PathGenerator):
             self._from_svg(h2[0], h2[1]),
             self._from_svg(p2[0], p2[1])
             ], None,None,False,3,None,False),False])
-          self.ske.exposeInternalGeometry(idx)
-          print("spline half. control points not visualized, not constaint", p1, h1, h2, p2)
-          # more internal geometry ...
+          if self.expose_int:
+            self.ske.exposeInternalGeometry(idx)
+          print("spline half. expose_int=", self.expose_int, p1, h1, h2, p2)
 
           if last_circ is None or not self._same_point(p1, last_circ):
             p1_idx = int(self.ske.GeometryCount)
@@ -367,13 +372,14 @@ class SketchPathGen(PathGenerator):
           else:
             h2_idx = p2_idx
 
-          self.ske.addConstraint([
-            Sketcher.Constraint('Radius', first_circ_idx,3,circ_r),
-            Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', p1_idx,3, idx,0),
-            Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', h1_idx,3, idx,1),
-            Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', h2_idx,3, idx,2),
-            Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', p2_idx,3, idx,3)
-            ])
+          if True:      # with our without constraints.
+            self.ske.addConstraint([
+              Sketcher.Constraint('Radius', first_circ_idx, circ_r),
+              Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', p1_idx,3, idx,0),
+              Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', h1_idx,3, idx,1),
+              Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', h2_idx,3, idx,2),
+              Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', p2_idx,3, idx,3)
+              ])
 
         if prev_idx is not None:
           self.ske.addConstraint([Sketcher.Constraint('Coincident', prev_idx,2, idx,1)])
@@ -571,7 +577,7 @@ class SketchPathGen(PathGenerator):
       self.bbox.add(V3)
       self.bbox.add(V4)
       self.ske.addGeometry([ Part.Ellipse(S1=V1, S2=V2, Center=c), ])
-      self.ske.exposeInternalGeometry(i)
+      if self.expose_int: self.ske.exposeInternalGeometry(i)
       self.stats['objEllipse'] += 1
 
 
@@ -639,7 +645,7 @@ class SketchPathGen(PathGenerator):
       i = int(self.ske.GeometryCount)
       ce = Part.Ellipse(S1=V1, S2=V2, Center=c)
       self.ske.addGeometry([ Part.ArcOfEllipse(ce, st, en) ])
-      self.ske.exposeInternalGeometry(i)
+      if self.expose_int: self.ske.exposeInternalGeometry(i)
       majAxisIdx = i+1          # CAUTION: is that a safe assumption?
       self.stats['objArc'] += 1
       ## CAUTION: with yflip=True sketcher reverses the endpoints of
@@ -681,7 +687,7 @@ class SketchPathGen(PathGenerator):
 fcdoc = FreeCAD.newDocument(docname)
 ske = fcdoc.addObject('Sketcher::SketchObject', 'Sketch_'+docname)
 
-svg = InkSvg(pathgen=SketchPathGen(ske, yflip=True))
+svg = InkSvg(pathgen=SketchPathGen(ske, yflip=True, expose_int=options.expose_internal_geometry))
 svg.load(svgfile)       # respin of inkex.affect()
 svg.traverse(options.ids)
 
