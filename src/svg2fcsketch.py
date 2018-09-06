@@ -249,7 +249,26 @@ class SketchPathGen(PathGenerator):
     if abs(p1[1]-p2[1]) > eps: return False
     return True
 
+  def _round_sigdigs(val, n=2):
+    """
+    Rounds the value to at most n significant digits.
+    0.00426221  -> 0.0043
+    3.78        -> 3.8
+    997         -> 1000
+    994         -> 990
+    """
+    n = int(max(1, n))
+    exp10 = math.floor(math.log10(abs(val))) if val != 0 else 0
+    decimal_shifter = float(10**exp10)
+    val = round(val/decimal_shifter, n-1)
+    # this final round is mathematically useless, but
+    # avoids _round_sigdigs(0.000491) -> 0.0004900000000000001
+    return round(val*decimal_shifter, -exp10+n-1)
+
   def _average_handle_length(self, sp):
+    (tra,sca,rot) = self._decompose_matrix2d()
+    sca = 0.5 * (abs(sca[0]) + abs(sca[1]))
+
     tot = 0
     cnt = 0
     for tri in sp:
@@ -261,27 +280,9 @@ class SketchPathGen(PathGenerator):
         tot += math.sqrt( (h2[0]-p[0])*(h2[0]-p[0]) + (h2[1]-p[1])*(h2[1]-p[1]) )
         cnt += 1
     if (cnt > 0 and tot > 0):
-      ## FIXME: nice rounding here, please!
-      return tot/cnt
-    return 10
-    """
-    addGeometry(Part.Circle(App.Vector(-85,192,0),App.Vector(0,0,1),10),True)    # 3
-    addGeometry(Part.Circle(App.Vector(-107,160,0),App.Vector(0,0,1),10),True)   # 4
-    addConstraint(Sketcher.Constraint('Radius',3,7.000000))
-    addConstraint(Sketcher.Constraint('Equal',3,4))
-    addGeometry(Part.Circle(App.Vector(-20,161,0),App.Vector(0,0,1),10),True)    # 5
-    addConstraint(Sketcher.Constraint('Equal',3,5))
-    addGeometry(Part.Circle(App.Vector(-42,193,0),App.Vector(0,0,1),10),True)    # 6
-    addConstraint(Sketcher.Constraint('Equal',3,6))
-    addGeometry(Part.BSplineCurve([App.Vector(-85,192),App.Vector(-107,160),App.Vector(-20,161),App.Vector(-42,193)],
-                None,None,False,3,None,False),False)
+      return self._round_sigdigs(sca*tot/cnt, 2)
+    return self._round_sigdigs(sca*10, 2)
 
-    Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',3,3,7,0)
-    Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',4,3,7,1)
-    Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',5,3,7,2)
-    Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint',6,3,7,3)
-    exposeInternalGeometry(7) # 7
-    """
 
   def pathString(self, d, node, mat):
     """
@@ -297,27 +298,27 @@ class SketchPathGen(PathGenerator):
       ]
     ]
     """
-    print("FIXME: reduce number of control points. Do not coincide with end points!")
     self._matrix_from_svg(mat)
     path = cubicsuperpath.parsePath(d)
-    for sp in path:
+    for subpath in path:
+      spt = SubPathTracker(self.ske, self._same_point, self.expose_int, 0.2 * self._average_handle_length(subpath))
       # These are the off by one's: four points -> three lines -> two constraints.
       prev_idx = None
       last_circ = None
       first_circ_idx = None
       last_circ_idx = None
-      circ_r = 0.2 * self._average_handle_length(sp)
+      circ_r = 0.2 * self._average_handle_length(subpath)
       j = 0
-      while j < len(sp)-1:
+      while j < len(subpath)-1:
         # lists of three, http://wiki.inkscape.org/wiki/index.php/Python_modules_for_extensions#cubicsuperpath.py
-        (h0,p1,h1) = sp[j]
+        (h0,p1,h1) = subpath[j]
         j = j+1
-        while j < len(sp):
-          (h2,p2,h3) = sp[j]
+        while j < len(subpath):
+          (h2,p2,h3) = subpath[j]
           if not self._same_point(p1, p2):
             break               # no null-segments, please!
           j += 1
-        if j >= len(sp):
+        if j >= len(subpath):
           break                 # nothing left.
 
         if self._same_point(h1, p1) and self._same_point(h2, p2):
