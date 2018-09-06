@@ -324,6 +324,7 @@ class SketchPathGen(PathGenerator):
           # it is a straigth line
           idx = int(self.ske.GeometryCount)
           self.ske.addGeometry([Part.LineSegment(self._from_svg(p1[0], p1[1]), self._from_svg(p2[0], p2[1]))])
+          last_circ = None
         else:
           # it is a spline
           idx = int(self.ske.GeometryCount)
@@ -342,6 +343,7 @@ class SketchPathGen(PathGenerator):
             self.ske.addGeometry(Part.Circle(self._from_svg(p1[0], p1[1]), App.Vector(0,0,1), circ_r),True)
             if first_circ_idx is None:
               first_circ_idx = p1_idx
+              self.ske.addConstraint(Sketcher.Constraint('Radius', p1_idx, circ_r))
             else:
               self.ske.addConstraint(Sketcher.Constraint('Equal', first_circ_idx, p1_idx))
             last_circ = p1
@@ -351,14 +353,14 @@ class SketchPathGen(PathGenerator):
 
           if last_circ is None or not self._same_point(h1, last_circ):
             h1_idx = int(self.ske.GeometryCount)
-            self.ske.addGeometry(Part.Circle(self._from_svg(h1[0], h1[1]), App.Vector(0,0,1), circ_r),True)
+            self.ske.addGeometry(Part.Circle(self._from_svg(h1[0], h1[1]), Normal=Base.Vector(0,0,1), Radius=circ_r),True)
             self.ske.addConstraint(Sketcher.Constraint('Equal', first_circ_idx, h1_idx))
           else:
             h1_idx = p1_idx
 
           if not self._same_point(p1, p2):
             p2_idx = int(self.ske.GeometryCount)
-            self.ske.addGeometry(Part.Circle(self._from_svg(p2[0], p2[1]), App.Vector(0,0,1), circ_r),True)
+            self.ske.addGeometry(Part.Circle(self._from_svg(p2[0], p2[1]), Normal=Base.Vector(0,0,1), Radius=circ_r),True)
             self.ske.addConstraint(Sketcher.Constraint('Equal', first_circ_idx, p2_idx))
             last_circ = p2
             last_circ_idx = p2_idx
@@ -367,12 +369,12 @@ class SketchPathGen(PathGenerator):
 
           if not self._same_point(p2, h2):
             h2_idx = int(self.ske.GeometryCount)
-            self.ske.addGeometry(Part.Circle(self._from_svg(h2[0], h2[1]), App.Vector(0,0,1), circ_r),True)
+            self.ske.addGeometry(Part.Circle(self._from_svg(h2[0], h2[1]), Normal=Base.Vector(0,0,1), Radius=circ_r),True)
             self.ske.addConstraint(Sketcher.Constraint('Equal', first_circ_idx, h2_idx))
           else:
             h2_idx = p2_idx
 
-          if True:      # with our without constraints.
+          if True:      # with or without constraints.
             self.ske.addConstraint([
               Sketcher.Constraint('Radius', first_circ_idx, circ_r),
               Sketcher.Constraint('InternalAlignment:Sketcher::BSplineControlPoint', p1_idx,3, idx,0),
