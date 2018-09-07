@@ -76,6 +76,7 @@ parser.add_option("-o", "--outfile", dest="outfile",
 parser.add_option("-i", "--id", "--ids", dest="ids",
                         action="append", type="string", default=[],
                         help="Select svg object(s) by id attribute. Use multiple times or combine with comma. Default: root object, aka all")
+parser.add_option("--tab", dest="tab", type="string")
 parser.add_option("--selected-nodes", dest="selected_nodes",
                         action="append", type="string", default=[],
                         help="id:subpath:position of selected nodes, if any")
@@ -86,8 +87,7 @@ parser.add_option("-V", "--version",
 parser.add_option("-v", "--verbose",
                          action="store_true", dest="verbose", default=False,
                          help="Be verbose. Default: silent.")
-parser.add_option("-e", "--expose-internal-geometry",
-                         action="store_true", dest="expose_internal_geometry", default=False,
+parser.add_option("-e", "--expose-internal-geometry", type="string", dest="expose_internal_geometry", default="false",
                          help="Expose internal geometry for Splines and Ellipses. Default: False.")
 (options, args) = parser.parse_args()
 
@@ -806,7 +806,7 @@ class SketchPathGen(PathGenerator):
 fcdoc = FreeCAD.newDocument(docname)
 ske = fcdoc.addObject('Sketcher::SketchObject', 'Sketch_'+docname)
 
-svg = InkSvg(pathgen=SketchPathGen(ske, yflip=True, expose_int=options.expose_internal_geometry))
+svg = InkSvg(pathgen=SketchPathGen(ske, yflip=True, expose_int=((options.expose_internal_geometry+"0")[0] not in "Ff0")))
 svg.load(svgfile)       # respin of inkex.affect()
 svg.traverse(options.ids)
 

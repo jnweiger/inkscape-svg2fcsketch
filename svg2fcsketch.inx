@@ -13,8 +13,8 @@
   </output>
   <param name="tab" type="notebook">
     <page name="fcstd" _gui-text="Settings ">
-      <param name="ids" type="string" _gui-text="IDs to export:" _gui-description="A coma separated list of IDs to export (Default: everything)"></param>
-      <param name="expose-internal-geometry" type="boolean" _gui-text="Expose internal geometry" _gui-description="Sitch internal geometry of splines and ellipses to visible when editing.">0</param>
+      <param name="expose-internal-geometry" type="boolean" _gui-text="Expose internal geometry" _gui-description="Sitch internal geometry of splines and ellipses to visible when editing.">true</param>
+      <param name="ids" type="string" _gui-text="IDs to export (all if empty):" _gui-description="A comma separated list of IDs to export (Default: everything)"></param>
       <param name="about_who" type="description">(C) 2018 Jürgen Weigert (juergen@fabmail.org) and contributors.
   For updates, praise or bug reports please refer to
   https://github.com/jnweiger/inkscape-svg2fcsketch
