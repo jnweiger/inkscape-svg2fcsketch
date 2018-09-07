@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<inkscape-extension xmlns="http://www.inkscape.org/namespace/inkscape/extension">
+  <_name>FreeCAD sketch Export v0.8</_name>
+  <id>com.github.jnweiger.inkscape-svg2fcsketch</id>
+  <dependency type="extension">org.inkscape.output.svg.inkscape</dependency>
+  <dependency type="executable" location="extensions">svg2fcsketch.py</dependency>
+  <output>
+    <extension>.fcstd</extension>
+    <mimetype>text/plain</mimetype>
+    <_filetypename>FreeCAD-0.17 sketch (*.fcstd)</_filetypename>
+    <_filetypetooltip>Export path objects to a FreeCAD sketch file</_filetypetooltip>
+    <dataloss>true</dataloss>
+  </output>
+  <param name="tab" type="notebook">
+    <page name="fcstd" _gui-text="Settings ">
+      <param name="ids" type="string" _gui-text="IDs to export:" _gui-description="A coma separated list of IDs to export (Default: everything)"></param>
+      <param name="expose-internal-geometry" type="boolean" _gui-text="Expose internal geometry" _gui-description="Sitch internal geometry of splines and ellipses to visible when editing.">0</param>
+      <param name="about_who" type="description">(C) 2018 Jürgen Weigert (juergen@fabmail.org) and contributors.
+  For updates, praise or bug reports please refer to
+  https://github.com/jnweiger/inkscape-svg2fcsketch
+      </param>
+  <!-- CAUTION: Keep in sync with line 3 above and with svg2fcsketch.py ca. line 71 __version__ = ... -->
+      <param name="about_version" type="description">Version 0.8</param>
+    </page>
+  </param>
+  <script>
+      <command reldir="extensions" interpreter="python">svg2fcsketch.py</command>
+  </script>
+</inkscape-extension>
+
